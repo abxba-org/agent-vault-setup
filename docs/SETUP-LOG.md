@@ -152,7 +152,22 @@ Final service table (all :443):
 | hermes-agent | hermes-agent.nousresearch.com | passthrough |
 | github-raw | raw.githubusercontent.com | passthrough |
 | github | *.github.com | passthrough |
+| github-apex | github.com | passthrough |
 | github-objects | objects.githubusercontent.com | passthrough |
+
+**Wildcard gotcha (cost a debugging round):** a one-level wildcard `*.github.com`
+matches `api.github.com` / `codeload.github.com` but NOT the bare apex
+`github.com` — it 403'd with "No broker service matching host". Apex hosts need
+their own explicit rule.
+
+**git gotcha:** git's libcurl ignores `CURL_CA_BUNDLE` and `SSL_CERT_FILE` —
+behind the MITM proxy, git operations need
+`GIT_SSL_CAINFO=/home/ubuntu/.hermes/av-ca.pem` (or
+`git config http.sslCAInfo <pem>` for the repo/user).
+
+**Redirect gotcha:** `hermes-agent.nousresearch.com` 301-redirects to
+`nousresearch.github.io`, which is NOT allowlisted → 403 on Hermes' update
+check. Add a passthrough for it if update checks should work (pending decision).
 
 Passthrough = allowlist + netguard + audit logging, NO credential injection;
 the agent's own headers flow unchanged. These hosts are data-egress paths by
