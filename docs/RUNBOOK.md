@@ -105,3 +105,4 @@ ON/OFF for the mgmt UI's tailnet exposure. Human-admin only (`sudo vault-mgmt`; 
 - `sudo vault-mgmt status` / `verify` — state dump / property assertions (incl. public-IP silence on 14321/14322)
 - Nothing in the service stack depends on the HTTPS URL (gateway talks to 127.0.0.1:14321 directly); proxy port 14322 is never exposed in any mode.
 - Script: `scripts/vault-mgmt` in this repo; deployed copy /usr/local/bin/vault-mgmt.
+- New-host approval convention (2026-09-30): chat sessions must deliver rule needs BATCHED — one consolidated list per task, never drip-fed. ABXBA approves all pending rules in one temp-ON window (`sudo vault-mgmt on` → UI → add all → auto-OFF 30m). Sessions check the rule inventory first — the host may already be allowlisted.
