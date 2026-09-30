@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# vault-mgmt — ON/OFF toggle for the agent-vault management UI's network exposure.
+# Human-admin tool. Install root:root 0755 at /usr/local/bin/vault-mgmt.
+#
+#   sudo vault-mgmt on [--persist]   tailnet-reachable; auto-OFF after 30m unless --persist
+#   sudo vault-mgmt off              localhost / SSH-tunnel only (default posture)
+#   sudo vault-mgmt status           read-only state dump (serve, funnel, ports, nftables)
+#   sudo vault-mgmt verify           assert the current mode's security properties
+#
+# The MITM proxy port 14322 is NEVER exposed in any mode. Changing modes never
+# touches agent-vault.service, its ports, or the hermes user's egress rules.
+
+set -euo pipefail
+
+SERVE_CMD_FILE=/etc/agent-vault/serve-cmd   # root:root 0644, one line:
+                                            #   tailscale serve --bg --https=443 http://127.0.0.1:14321
+AUTO_OFF_UNIT=vault-mgmt-autorevert
+AUTO_OFF_DELAY=30m
+MGMT=14321
+PROXY=14322
+PUBLIC_IP=57.129.161.166                    # external OVH address, for the not-public probe
+
+die() { echo "FAIL: $*" >&2; exit 1; }
+say() { echo "== $*"; }
+[[ $EUID -eq 0 ]] || die "run with sudo"
+
+cmd="${1:-}"; shift || true
+PERSIST=0
+case "$cmd" in
+  on) while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --persist) PERSIST=1 ;;
+          *) die "unknown flag: $1" ;;
+        esac; shift; done ;;
+  off|status|verify) [[ $# -eq 0 ]] || die "unexpected arguments" ;;
+  *) die "usage: vault-mgmt {on [--persist] | off | status | verify}" ;;
+esac
+
+serve_txt()  { tailscale serve status  2>/dev/null || true; }
+funnel_txt() { tailscale funnel status 2>/dev/null || true; }
+
+# True when neither serve nor funnel output shows any https handler or our ports.
+no_exposure() {
+  local bad
+  bad=$({ serve_txt; funnel_txt; } | grep -Ei "https://|${MGMT}|${PROXY}" || true)
+  [[ -z "$bad" ]] || { echo "$bad" >&2; return 1; }
+}
+
+# True when both ports bind 127.0.0.1 only (or are absent).
+loopback_only() {
+  local bad
+  bad=$(ss -tlnp 2>/dev/null | awk -v m=":${MGMT}" -v p=":${PROXY}" \
+        '$4 ~ m || $4 ~ p { if ($4 !~ /^127\.0\.0\.1:/ && $4 !~ /^\[::1\]:/) print }')
+  [[ -z "$bad" ]] || { echo "$bad" >&2; return 1; }
+}
+
+# True when no funneled (public-internet) URL is advertised.
+funnel_off() { ! funnel_txt | grep -qi 'https://'; }
+
+# ON mode: the serve entry must be explicitly tailnet-scoped, never funneled.
+tailnet_only() {
+  serve_txt | grep -q '(tailnet only)' && ! serve_txt | grep -qi '(funnel)'
+}
+
+cancel_auto_off() {
+  systemctl stop "${AUTO_OFF_UNIT}.timer" "${AUTO_OFF_UNIT}.service" 2>/dev/null || true
+}
+
+verify_off() {
+  no_exposure   || die "serve/funnel still exposes the mgmt UI (lines above)"
+  funnel_off    || die "funnel is active — must never be"
+  loopback_only || die "non-loopback bind detected (lines above)"
+  if curl -m 5 --noproxy '*' -s -o /dev/null "http://${PUBLIC_IP}:${MGMT}/" 2>/dev/null; then
+    die "public IP answered on ${MGMT}"
+  fi
+  if curl -m 5 --noproxy '*' -s -o /dev/null "http://${PUBLIC_IP}:${PROXY}/" 2>/dev/null; then
+    die "public IP answered on ${PROXY}"
+  fi
+  say "OFF verified: no serve/funnel entries, ports loopback-only, public IP silent on ${MGMT}/${PROXY}"
+  say "Mgmt UI is reachable only via:  ssh -L ${MGMT}:127.0.0.1:${MGMT} vps-ovh  ->  http://localhost:${MGMT}"
+}
+
+verify_on() {
+  tailnet_only  || die "serve entry is not tailnet-scoped or funnel is on"
+  loopback_only || die "non-loopback bind detected (lines above)"
+  serve_txt | grep -q 'https'                        || die "no https serve entry found"
+  serve_txt | grep -qE "127\.0\.0\.1:${MGMT}"        || die "serve does not point at 127.0.0.1:${MGMT}"
+  if serve_txt | grep -qE "${PROXY}"; then
+    die "PROXY PORT ${PROXY} EXPOSED VIA SERVE — aborting"
+  fi
+  say "ON verified: serve 443 -> 127.0.0.1:${MGMT}, funnel off, proxy port never exposed"
+  say "Reminder: while ON, a tailnet ACL should restrict which devices can reach :443"
+}
+
+do_on() {
+  [[ -r "$SERVE_CMD_FILE" ]] || die "missing $SERVE_CMD_FILE"
+  cancel_auto_off
+  bash "$SERVE_CMD_FILE" || die "serve command failed"
+  if [[ $PERSIST -eq 0 ]]; then
+    systemd-run --on-active="$AUTO_OFF_DELAY" --unit="$AUTO_OFF_UNIT" \
+      /usr/local/bin/vault-mgmt off
+    say "auto-OFF armed: reverts in ${AUTO_OFF_DELAY} (use --persist to keep ON standing)"
+  else
+    say "PERSISTENT ON — remember to flip back: sudo vault-mgmt off"
+  fi
+  verify_on
+}
+
+do_off() {
+  cancel_auto_off
+  tailscale serve --https=443 off || die "could not remove the serve entry"
+  verify_off
+}
+
+do_status() {
+  say "tailscale serve";  serve_txt
+  say "tailscale funnel"; funnel_txt
+  say "listening sockets"
+  ss -tlnp 2>/dev/null | grep -E ":${MGMT}|:${PROXY}" || echo "(none)"
+  if nft list table inet av_hermes >/dev/null 2>&1; then
+    say "nftables: table inet av_hermes EXISTS (uid 1003 egress scoping)"
+  else
+    say "nftables: no inet av_hermes table"
+  fi
+  if systemctl is-active -q "${AUTO_OFF_UNIT}.timer" 2>/dev/null; then
+    say "auto-OFF timer: ARMED"
+  else
+    say "auto-OFF timer: not armed"
+  fi
+}
+
+case "$cmd" in
+  on)     do_on ;;
+  off)    do_off ;;
+  status) do_status ;;
+  verify) serve_txt | grep -q 'https' && verify_on || verify_off ;;
+esac

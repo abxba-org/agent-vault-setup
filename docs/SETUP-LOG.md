@@ -235,3 +235,14 @@ sudo tailscale serve status   # verify
 3. System-unit gateway as `hermes` (draft in this repo) + Slack/model verify
 4. nftables `inet av_hermes` for hermes uid (auto-revert armed first)
 5. Verification suite + external port scan → revoke old key → destroy backups
+
+## Mgmt exposure toggle (2026-09-30 ~20:30 UTC) — EXECUTED
+
+- Deployed `/usr/local/bin/vault-mgmt {on [--persist]|off|status|verify}` (root:root 0755, human-admin only; no sudo rule for `hermes`). Serve command recorded in root-owned `/etc/agent-vault/serve-cmd` (0644). Script mirrored in repo `scripts/vault-mgmt`.
+- Default posture flipped to **OFF**: `tailscale serve --https=443 off` (targeted, never `serve reset`) → mgmt UI localhost-only; admin access via `ssh -L 14321:127.0.0.1:14321` → `http://localhost:14321`.
+- ON mode arms a 30-min auto-revert (`systemd-run` unit `vault-mgmt-autorevert`) unless `--persist` — a forgotten ON cannot become the standing posture.
+- `verify` asserts: no serve/funnel entries (OFF) or the `(tailnet only)` annotation (ON); ports bound to 127.0.0.1/[::1] only (ssh -L tunnels legitimately bind [::1]); funnel never on; public IP silent on 14321/14322.
+- Verified OFF: tailnet URL refuses connection; tunnel serves the login page (200); public IP silent. on/off cycle exercised by ABXBA.
+- Gotchas: `tailscale funnel status` prints the serve tree even when funnel is off — discriminate on the `(tailnet only)` annotation. SSH-tunnel `[::1]` binds are loopback, not exposure.
+- Gate-1 auth probes: unauthenticated (localhost as hermes + tailnet leg) — credentials 404 (route masked), settings/logs 401, no data. Agent token (proxy role) — metadata reads 200 (`/v1/vaults`, `/services`, `/agents`, `/settings`), logs 403, mutations 403 (invalid-rule POST, list unchanged), credentials 404. Wider than the documented proxy-token scope — ABXBA to accept or harden.
+- **FINDING: `inet av_hermes` is NOT present live** (`nft list` + `vault-mgmt status`) despite the cutover results above — transient rules lost (reboot suspected). Hermes-uid egress enforcement is currently convention-only (HTTPS_PROXY). Re-create + persist (nftables unit) with armed auto-revert = open go/no-go (ABXBA).

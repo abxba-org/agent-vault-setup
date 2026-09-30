@@ -93,3 +93,13 @@ Rollback after revocation = mint a fresh temporary key and enter into vault; NEV
 - remove cron restic considerations: restic backs up only CODE + docs (verified — no ~/.hermes)
 - update PLAN.md threat model: passthrough hosts (slack.com, *.slack.com, portal/hermes-agent.nousresearch.com, raw.githubusercontent.com) are data-egress paths by design; Slack tokens remain in hermes' .env until a later phase brokers them
 - final: docs at /opt/agent-vault-docs (PLAN.md, PHASE1-REPORT.md, RUNBOOK.md, rehearsal.log)
+
+## Ops — Management UI exposure toggle (post-cutover)
+
+ON/OFF for the mgmt UI's tailnet exposure. Human-admin only (`sudo vault-mgmt`; root 0755, no sudo rule for `hermes`).
+
+- OFF (default posture): `sudo vault-mgmt off` — serve entry removed; UI reachable only via `ssh -L 14321:127.0.0.1:14321` → http://localhost:14321
+- ON: `sudo vault-mgmt on` — auto-reverts after 30 min unless `--persist`; while ON, a tailnet ACL should scope vps-ovh:443 to admin devices
+- `sudo vault-mgmt status` / `verify` — state dump / property assertions (incl. public-IP silence on 14321/14322)
+- Nothing in the service stack depends on the HTTPS URL (gateway talks to 127.0.0.1:14321 directly); proxy port 14322 is never exposed in any mode.
+- Script: `scripts/vault-mgmt` in this repo; deployed copy /usr/local/bin/vault-mgmt.
