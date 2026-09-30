@@ -29,8 +29,8 @@ GitHub user: DUDE616 · Docs home on server: `/opt/agent-vault-docs/`
 | Hermes `.env` | placeholder `__openrouter_api_key__` + proxy env block (see Wiring) |
 | Gateway | restarted, Slack connected via passthrough |
 | Management UI | https://vps-ovh.tail95f2ee.ts.net (Tailscale Serve, tailnet-only) |
-| Old key | still in pre-cutover process envs; revocation scheduled post-cutover |
-| Cutover | NOT done yet — dedicated `hermes` user migration + nftables pending (RUNBOOK.md) |
+| Old key | **NOT revoked — deviation accepted by ABXBA**; still in /root backups; revoke later via dashboard, then destroy /root/av-prechange-backup + /root/cutover-backup |
+| Cutover | DONE 2026-09-30: `hermes` user (uid 1003, no groups), system-unit gateway, nftables `inet av_hermes` live, external ports closed, all acceptance checks pass |
 
 ---
 
@@ -213,6 +213,20 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:14321
 # → https://vps-ovh.tail95f2ee.ts.net (tailnet only; 14322 never exposed)
 sudo tailscale serve status   # verify
 ```
+
+## Cutover results (2026-09-30 19:05–19:15 UTC) — EXECUTED
+
+- Pristine backup: `/root/cutover-backup` (4.2G, 47s)
+- `hermes` user created (uid 1003, **no extra groups, no sudo**); tree migrated (38s) + full-tree path rewrite (28s); `.env`/`config.yaml` clean (0 `/home/ubuntu` refs, 0 `sk-or-` strings)
+- Gateway runs as a SYSTEM unit under `hermes` — **new lesson: `ProtectHome=true` makes `/home` invisible in the service mount namespace → EXEC ENOENT; must be false for a runtime living in `/home`, with `ProtectSystem=strict` + `ReadWritePaths=/home/hermes/.hermes` providing confinement**
+- First-boot provisioning ran as `hermes`; `GIT_SSL_CAINFO` added to both `.env` copies (git calls behind the MITM need it); `nousresearch.github.io` (redirect target) allowlisted; CLI launcher published to `/home/hermes/.local/bin/hermes`
+- Model calls as hermes uid: `CUTOVER-OK`, `POST-REVOKE-OK` — all through the proxy
+- nftables `inet av_hermes` live for uid 1003 (proxy + DNS only, rest dropped): direct = timeout ✓, proxied = 200 ✓, survived Docker restart + fail2ban reload ✓, auto-revert armed then disarmed ✓
+- External port scan (ABXBA, from WSL): 14321/14322 on 57.129.161.166 **time out — not publicly reachable** ✓
+- Boot ordering verified: `hermes-gateway` Requires/After `agent-vault.service`
+- `/proc/*/environ` scan: no `sk-or-` anywhere ✓ (caveat: dotenv values live in process memory, not environ)
+
+**DEVIATION (accepted by ABXBA): the old key `sk-or-v1-a75...2e6` was NOT revoked** — it remains valid and present in `/root/av-prechange-backup`, `/root/cutover-backup`, and process memory of retired sessions. Backups are therefore KEPT (they also serve as rollback source). If this key is ever revoked, destroy both backup dirs per plan §23.
 
 ## Next: live cutover window (RUNBOOK.md — requires ABXBA present)
 
