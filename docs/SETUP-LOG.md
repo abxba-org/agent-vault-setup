@@ -25,7 +25,7 @@ GitHub user: DUDE616 · Docs home on server: `/opt/agent-vault-docs/`
 |---|---|
 | agent-vault.service | active, hardened, loopback-only 127.0.0.1:14321 (mgmt) + 14322 (MITM proxy) |
 | Vault | `hermes` — `unmatched_host_policy=deny` |
-| Credential | `OPENROUTER_API_KEY` (static) — **currently the OLD key, pending replacement by ABXBA** |
+| Credential | `OPENROUTER_API_KEY` (static) — NEW dedicated key verified distinct from old (old = `a75...2e6`, vault = `f52...54a3`) |
 | Hermes `.env` | placeholder `__openrouter_api_key__` + proxy env block (see Wiring) |
 | Gateway | restarted, Slack connected via passthrough |
 | Management UI | https://vps-ovh.tail95f2ee.ts.net (Tailscale Serve, tailnet-only) |

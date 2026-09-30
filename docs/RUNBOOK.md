@@ -8,8 +8,10 @@ Run as the admin login (ubuntu via SSH). Do NOT run unattended.
 - [ ] USER: out-of-band access confirmed (OVH KVM/rescue console reachable, admin SSH + sudo tested from a second device)
 - [ ] Full pristine backup: `sudo rsync -a /home/ubuntu/.hermes/ /root/cutover-backup/.hermes/ && sudo chmod -R go-rwx /root/cutover-backup`
       UNDO-source for everything below.
-- [ ] Fingerprints captured (hashes/labels only, never key values):
-      old key label via `GET /api/v1/key` with old key (direct), new key via proxy — MUST differ before cutover starts
+- [ ] Key-rotation verified: vault credential ≠ backup old key (compare via
+      `vault credential get` as owner vs backup, equality-only). NOTE: OpenRouter's
+      `GET /api/v1/key` returns USER-AGGREGATE label/usage, not per-key data — it
+      cannot fingerprint a key. Fingerprint via the dashboard, or the equality test.
 - [ ] NOTE: dotenv-loaded vars are invisible in /proc/PID/environ — the definitive direct-path closure is the nftables table (step 4), not the environ scan alone.
 
 ## Step 1 — Stop ALL Hermes processes
