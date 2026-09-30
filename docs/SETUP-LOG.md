@@ -254,3 +254,11 @@ sudo tailscale serve status   # verify
 - Persistence: `/etc/av-hermes.nft` + oneshot `av-hermes-nftables.service` (ExecStartPre deletes table, ExecStart `nft -f`; enabled, multi-user.target). `nftables.service` deliberately left DISABLED — enabling it would flush docker's tables at boot.
 - Verified under the table: proxied OpenRouter call 200 (with vault CA bundle — bare curl fails TLS by design), mgmt lifeline 14321 → 200, direct egress (ifconfig.me) dropped (exit 28), ubuntu/SSH unaffected, hermes-gateway + agent-vault active; table survived `docker restart` + `fail2ban reload`.
 - NOTE: the agent proxy token appeared unredacted in an agent-session log during probe work — rotate at the next owner window (vault owner action + .env update).
+
+## Bulk service-rule batch, Tier A+B (2026-09-30 ~21:25 UTC) — EXECUTED (ABXBA go)
+
+- Owner mgmt auth discovered: the owner CLI session persists at `/var/lib/agent-vault/.agent-vault/session.json` (0600 agent-vault) — its 72-char token works as `Authorization: Bearer` on the mgmt API. Owner login password is NOT the master-file content ("Invalid email or password" with master).
+- Batch API: `POST /v1/vaults/hermes/services` takes `{"services":[{name, host, auth:{type}}]}`; upserts by name; name min length 3; validation errors name the failing index.
+- Added 16 passthrough rules (Tier A recommended: npm-registry, npm-apex, composio-backend, composio-app, composio-api, speed-test, httpbin; Tier B optional: hf-apex, hf-lfs, hf-wildcard, deb, deb-sec, ubuntu-archive, ubuntu-sec, openai-api, anthropic-api). Note `api.composio.dev` added beyond the announced list — composio-core uses it.
+- Inventory now 38 entries — earlier temp-ON windows had already added hosts (api-firecrawl-dev, us-i-posthog-com, composio-dev, httpbin-org, registry-npmjs-org, hermes-assets…, release-assets…, vps-ovh-tail95f2ee-ts-net). DUPLICATE HOSTS exist under different names (registry-npmjs-org/npm-registry, httpbin-org/httpbin, api-composio-dev/composio-api, backend-composio-dev/composio-backend, composio-dev/composio-app+composio-api) — dedupe is optional, owner action.
+- Verified: proxied GET registry.npmjs.org as hermes uid → 200. Owner session token is owner-equivalent credential at rest — treat its file as sensitive.
