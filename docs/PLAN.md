@@ -883,3 +883,13 @@ Production is acceptable only when all are true:
 Do not modify production Hermes credentials until the sandbox passes the complete acceptance suite.
 
 After the Phase 1 report, make a separate go/no-go decision for production.
+
+# Status addendum — 2026-09-30 (post-cutover, live state)
+
+- Cutover EXECUTED (dedicated hermes user, system gateway, nftables, verification suite) — full record in SETUP-LOG, procedures in RUNBOOK.
+- Criterion 16 (nftables prevents direct bypass): the cutover table was transient and lost at a reboot — re-created and PERSISTED (`/etc/av-hermes.nft` + oneshot `av-hermes-nftables.service`, enabled). Deviation: allow rule for 127.0.0.1:14321 added (AGENT_VAULT_ADDR points at mgmt; gateway must re-fetch post-restart).
+- Criteria 17/18 (ports not public; mgmt localhost/Tailscale only): now enforced AND toggleable — `scripts/vault-mgmt` (deployed /usr/local/bin/vault-mgmt), default OFF, temp-ON auto-reverts 30m unless --persist, funnel asserted off, public-IP silence verified.
+- Criterion 20 (old key revoked): OPEN — accepted deviation; still the blocking precondition for any migration window.
+- Owner mgmt auth: Bearer token from `/var/lib/agent-vault/.agent-vault/session.json`; owner login password is separate from the master file. Batch rule API: POST /v1/vaults/hermes/services {"services":[{name,host,auth:{type}}]}, upsert by name.
+- Service rules: 38 entries (openrouter bearer; all else passthrough) incl. pypi, npm, composio, firecrawl, HF, Debian/Ubuntu repos, openai/anthropic APIs. Duplicate hosts under different rule names — dedupe optional.
+- Open items: criterion 20 revocation; tailnet ACL scoping vps-ovh:443 while ON; agent-token rotation (leaked in an agent session log); optional rule dedupe.
