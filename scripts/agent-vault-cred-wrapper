@@ -1,0 +1,5 @@
+#!/bin/sh
+# Feeds the master password from systemd LoadCredential to the server via
+# stdin — the value never exists in the process environment.
+set -eu
+exec /usr/local/bin/agent-vault server --host 127.0.0.1 --port 14321 --mitm-port 14322 --password-stdin < "${CREDENTIALS_DIRECTORY}/avmaster"

@@ -1,0 +1,32 @@
+[Unit]
+Description=Hermes Agent Gateway - Messaging Platform Integration
+After=network-online.target agent-vault.service
+Wants=network-online.target
+Requires=agent-vault.service
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+Environment=HERMES_HOME=/home/hermes/.hermes
+Environment=HERMES_SUPERVISED_CHILD=1
+Environment=PATH=/home/hermes/.hermes/hermes-agent/.hermes/bin:/home/hermes/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory=/home/hermes
+ExecStart=/home/hermes/.hermes/hermes-agent/.hermes/bin/hermes gateway run
+Restart=on-failure
+RestartSec=5
+# Hermes needs to manage its own session dirs; no extra privileges required
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/hermes/.hermes
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
