@@ -65,6 +65,7 @@ UNDO: disable system unit, re-enable user unit, restart. (Session tools like her
 sudo systemd-run --on-active=10m --unit=av-nft-revert nft delete table inet av_hermes   # ARM REVERT FIRST
 sudo nft add table inet av_hermes
 sudo nft add chain inet av_hermes output '{ type filter hook output priority 10; policy accept; }'
+sudo nft add rule inet av_hermes output skuid $(id -u hermes) ip daddr 127.0.0.1 tcp dport 14321 counter accept  # mgmt API — AGENT_VAULT_ADDR needs it post-restart (added 2026-09-30)
 sudo nft add rule inet av_hermes output skuid $(id -u hermes) ip daddr 127.0.0.1 tcp dport 14322 counter accept
 sudo nft add rule inet av_hermes output skuid $(id -u hermes) udp dport 53 counter accept
 sudo nft add rule inet av_hermes output skuid $(id -u hermes) tcp dport 53 counter accept
@@ -74,6 +75,7 @@ VERIFY: as hermes uid — direct `curl https://httpbin.org/get` FAILS; proxied m
 ubuntu/SSH unaffected; gateway still connected.
 RESILIENCE: `sudo systemctl restart docker` + `sudo fail2ban-client reload` → re-run VERIFY both.
 DISARM: `sudo systemctl stop av-nft-revert.timer` only after all verifies pass.
+PERSIST (done 2026-09-30): `/etc/av-hermes.nft` + oneshot `av-hermes-nftables.service` (enabled). Do NOT enable `nftables.service` — its default conf flushes docker's tables at boot.
 UNDO: `sudo nft delete table inet av_hermes`.
 
 ## Step 5 — Verification suite (acceptance criteria)

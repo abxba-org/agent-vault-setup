@@ -246,3 +246,11 @@ sudo tailscale serve status   # verify
 - Gotchas: `tailscale funnel status` prints the serve tree even when funnel is off — discriminate on the `(tailnet only)` annotation. SSH-tunnel `[::1]` binds are loopback, not exposure.
 - Gate-1 auth probes: unauthenticated (localhost as hermes + tailnet leg) — credentials 404 (route masked), settings/logs 401, no data. Agent token (proxy role) — metadata reads 200 (`/v1/vaults`, `/services`, `/agents`, `/settings`), logs 403, mutations 403 (invalid-rule POST, list unchanged), credentials 404. Wider than the documented proxy-token scope — ABXBA to accept or harden.
 - **FINDING: `inet av_hermes` is NOT present live** (`nft list` + `vault-mgmt status`) despite the cutover results above — transient rules lost (reboot suspected). Hermes-uid egress enforcement is currently convention-only (HTTPS_PROXY). Re-create + persist (nftables unit) with armed auto-revert = open go/no-go (ABXBA).
+
+## Egress enforcement re-created + persisted (2026-09-30 ~20:45 UTC) — EXECUTED (ABXBA go)
+
+- Applied `inet av_hermes` with the 10-min auto-revert armed FIRST (`systemd-run --on-active=10m --unit=av-nft-revert`); all verifies passed, then disarmed deliberately.
+- Deviation from RUNBOOK Step 4: allow rule for 127.0.0.1:**14321** added alongside 14322 — `AGENT_VAULT_ADDR` points at the mgmt port and the gateway client must reach it after a restart; the cutover ruleset would have broken post-restart credential fetch.
+- Persistence: `/etc/av-hermes.nft` + oneshot `av-hermes-nftables.service` (ExecStartPre deletes table, ExecStart `nft -f`; enabled, multi-user.target). `nftables.service` deliberately left DISABLED — enabling it would flush docker's tables at boot.
+- Verified under the table: proxied OpenRouter call 200 (with vault CA bundle — bare curl fails TLS by design), mgmt lifeline 14321 → 200, direct egress (ifconfig.me) dropped (exit 28), ubuntu/SSH unaffected, hermes-gateway + agent-vault active; table survived `docker restart` + `fail2ban reload`.
+- NOTE: the agent proxy token appeared unredacted in an agent-session log during probe work — rotate at the next owner window (vault owner action + .env update).
