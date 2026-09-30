@@ -262,3 +262,10 @@ sudo tailscale serve status   # verify
 - Added 16 passthrough rules (Tier A recommended: npm-registry, npm-apex, composio-backend, composio-app, composio-api, speed-test, httpbin; Tier B optional: hf-apex, hf-lfs, hf-wildcard, deb, deb-sec, ubuntu-archive, ubuntu-sec, openai-api, anthropic-api). Note `api.composio.dev` added beyond the announced list — composio-core uses it.
 - Inventory now 38 entries — earlier temp-ON windows had already added hosts (api-firecrawl-dev, us-i-posthog-com, composio-dev, httpbin-org, registry-npmjs-org, hermes-assets…, release-assets…, vps-ovh-tail95f2ee-ts-net). DUPLICATE HOSTS exist under different names (registry-npmjs-org/npm-registry, httpbin-org/httpbin, api-composio-dev/composio-api, backend-composio-dev/composio-backend, composio-dev/composio-app+composio-api) — dedupe is optional, owner action.
 - Verified: proxied GET registry.npmjs.org as hermes uid → 200. Owner session token is owner-equivalent credential at rest — treat its file as sensitive.
+
+## Rule dedupe (2026-09-30 ~21:35 UTC) — EXECUTED (ABXBA go)
+
+- Deleted 4 redundant rules (duplicate hosts under different names): registry-npmjs-org, httpbin-org, backend-composio-dev, api-composio-dev. Inventory 38 → 34, every host unique (verified by re-list).
+- CAVEAT: api.composio.dev had TWO rules — the older `api-composio-dev` was **bearer with COMPOSIO_API_KEY injection**, mine was passthrough. Credential list endpoint returns 404 even for the owner Bearer token (route masked), so existence of that credential could not be confirmed; the bearer rule was deleted and passthrough kept (host stays reachable, fail-closed dependency avoided). If composio calls need injected auth back, re-add bearer in a future window.
+- `composio-dev` = apex composio.dev (kept, not a duplicate).
+- DELETE API: `DELETE /v1/vaults/hermes/services/{name}` → 200 {"removed", "removed_host", "services_count"}.
