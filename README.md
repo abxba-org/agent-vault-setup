@@ -19,6 +19,25 @@ a MITM forward proxy injects credentials server-side, with strict-deny egress an
 | scripts/hermes-gateway.system-unit | Gateway as a system service under the dedicated `hermes` user |
 | scripts/vault-mgmt | ON/OFF toggle for the mgmt UI's tailnet exposure — default OFF (localhost/SSH-tunnel only), ON auto-reverts after 30 min unless --persist |
 
+## Automatic security updates
+
+On Ubuntu/Debian systems, install and enable unattended security updates with:
+
+```bash
+sudo apt update
+sudo apt install unattended-upgrades
+sudo dpkg-reconfigure unattended-upgrades
+```
+
+The `dpkg-reconfigure` command enables the distribution's unattended-upgrades configuration. Review the package and reboot settings before using this on production systems. Do not run a separate cron job for the same package updates, because it can overlap with the system's built-in `apt-daily` and `apt-daily-upgrade` timers.
+
+Check the update timer with:
+
+```bash
+systemctl status apt-daily-upgrade.timer
+systemctl list-timers --all | grep apt
+```
+
 ## Status
 
 Production LIVE: Hermes gateway runs as the dedicated `hermes` user behind the MITM proxy,
